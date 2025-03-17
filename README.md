@@ -13,4 +13,9 @@ $ python3 app.py
 
 The first time you run the app, Hugging Face's model will be downloaded. This is a large file and may take a while to download (~15GB, so about 10-15 minutes on a decent connection). 
 
-You will be asked to upload an image of the card that you want to play. Currently this is a 2x3 grid of Dixit cards (that is the only format accepted, anything else will fail to break up the images correctly). Once you do this, and hit 'Upload and Start', the app will process the image and return a caption for one of the cards in AI agent's hand. 
+You will be asked to upload an image of the card that you want to play. Currently, this is a 2x3 grid of Dixit cards (that is the only format accepted, anything else will fail to break up the images correctly). Once you do this, and hit 'Upload and Start', the app will process the image and return a caption for one of the cards in AI agent's hand. 
+
+Screenshot of the LLM captioning one of the images, Dixit style:
+![image](https://github.com/user-attachments/assets/418ca842-0adc-4932-a0d4-3a05ad0764d4)
+
+![image](https://github.com/user-attachments/assets/aa7e1884-fa91-48ea-bbca-e3e61a43a651)
