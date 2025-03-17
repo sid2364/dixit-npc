@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 import os
+import re
 import random
 from flask import Flask, request, redirect, url_for, render_template_string, send_from_directory, session
 from PIL import Image
 import torch
-from transformers import AutoProcessor, Blip2ForConditionalGeneration
+# from transformers import AutoProcessor, Blip2ForConditionalGeneration
+# from transformers import ViltProcessor, ViltForMaskedLM
 
 import os
 random_key = os.urandom(24)
 
-PROMPT = "Generate a surreal, dream-like, and poetic caption in the style of Dixit for the image. Give me one just sentence or phrase: "
+prompt = "Generate a surreal, dream-like, and poetic caption in the style of Dixit:"
 
 # ------------------------------
 # Set up Flask app and config
@@ -23,8 +25,39 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # Load models once at startup
 # Use AutoProcessor instead of BlipProcessor
-processor = AutoProcessor.from_pretrained("Salesforce/blip2-opt-2.7b")
+from transformers import Blip2Processor, Blip2ForConditionalGeneration
+
+# Load model (do this once at startup)
+processor = Blip2Processor.from_pretrained("Salesforce/blip2-opt-2.7b")
 model = Blip2ForConditionalGeneration.from_pretrained("Salesforce/blip2-opt-2.7b")
+
+
+def creative_caption_direct(image):
+    # Process the image and generate caption
+    inputs = processor(image, text=prompt, return_tensors="pt").to(device)
+
+    with torch.no_grad():
+        outputs = model.generate(
+            **inputs,
+            max_length=80,
+            do_sample=True,
+            top_p=0.9,
+            temperature=1.3,
+            num_return_sequences=1
+        )
+
+    # Decode the output
+    caption = processor.decode(outputs[0], skip_special_tokens=True)
+
+    # Remove the prompt from the caption
+    caption = caption.replace(prompt, "").strip()
+
+    return caption
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model.to(device)
+
+
 
 # Utility Funcs
 def split_cards(image_path, num_rows=2, num_cols=3):
@@ -64,22 +97,50 @@ def save_cards(cards, prefix="card"):
         filenames.append(filename)
     return filenames
 
-
-def creative_caption_direct(image, creativity_prompt=PROMPT):
+def creative_caption_direct_(image):
     # Prepare inputs with the creative prompt.
-    inputs = processor(image, text=creativity_prompt, return_tensors="pt")
-    output = model.generate(
-        **inputs,
-        max_length=100,
-        min_length=10,
-        do_sample=True,
-        top_p=0.9,
-        temperature=1.2,
-        num_return_sequences=1
+    encoding = processor(image, text=PROMPT, return_tensors="pt")
+    pixel_values = encoding["pixel_values"]
+    print("encoding", encoding)
+    outputs = model(
+         **encoding
+    #     # max_length=100,
+    #     # do_sample=True,
+    #     # top_p=0.9,
+    #     # temperature=1.3,
+    #     # num_return_sequences=1
     )
-    print("output", output)
-    caption = processor.decode(output[0], skip_special_tokens=True)
-    print("caption", caption)
+    # print("output", output)
+
+    tl = 1 # number of images we're generating captions for
+    inferred_token = [prompt]
+
+    # print("output", output)
+    # caption = processor.decode(output[0], skip_special_tokens=True)
+    # print("caption", caption)
+    # return caption
+
+    print("tl", tl)
+    with torch.no_grad():
+        for i in range(tl):
+            encoded = processor.tokenizer(inferred_token)
+            input_ids = torch.tensor(encoded.input_ids).to(device)
+            encoded = encoded["input_ids"][0][1:-1]
+            outputs = model(input_ids=input_ids, pixel_values=pixel_values)
+            mlm_logits = outputs.logits[0]  # shape (seq_len, vocab_size)
+            # only take into account text features (minus CLS and SEP token)
+            mlm_logits = mlm_logits[1: input_ids.shape[1] - 1, :]
+            mlm_values, mlm_ids = mlm_logits.softmax(dim=-1).max(dim=-1)
+            # only take into account text
+            mlm_values[torch.tensor(encoded) != 103] = 0
+            select = mlm_values.argmax().item()
+            encoded[select] = mlm_ids[select].item()
+            inferred_token = [processor.decode(encoded)]
+
+    print("inferred_token", inferred_token)
+    encoded = processor.tokenizer(inferred_token)
+    caption = processor.decode(encoded.input_ids[0], skip_special_tokens=True)
+    print("caption ========", caption)
     return caption
 
 def computer_storyteller_turn(cards):
@@ -91,9 +152,9 @@ def computer_storyteller_turn(cards):
     # basic_caption = generate_basic_caption(card_image)
     basic_caption = creative_caption_direct(card_image)
     # creative_caption = creative_rewrite(basic_caption)
-    
+
     # Return only the caption after the prompt
-    return chosen_index, basic_caption.split(PROMPT)[1]
+    return chosen_index, basic_caption
 
 # Flask stuff, routes and views
 
