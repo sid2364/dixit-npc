@@ -213,7 +213,7 @@ def computer_storyteller():
         html = """
         <h2>Computer as Storyteller</h2>
         <p><strong>Computer's Creative Caption:</strong> {{ caption }}</p>
-        <p>Click the radio button of the card you think matches the caption:</p>
+        <p>Which one do you think it is?</p>
         <form method="post">
           {% for idx in range(card_files|length) %}
             <input type="radio" name="guess" value="{{ idx }}" required>
